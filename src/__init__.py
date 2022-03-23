@@ -136,48 +136,49 @@ def main():
         for (url, name) in zip(img_urls, img_names):
             save(url, name, path + name)
 
-
-
     # Save music
     if not args.nomusic:
         qprint("Saving music...")
         track_names = []
         track_urls = []
-        if args.countfrom1:
-            n = 1
-        else:
-            n = 0
 
-        for p in soup.find_all("table"):
-            for t in p.find_all("tr"):
-                try:
-                    a = t.find_all("td")[2].a
-
-                    if ".mp3" in a['href']:     # Links on this page are only to mp3s
-                        name = a.text + quality
-
-                        unique = True
-                        for track in track_names:
-                            if name in track:
-                                unique = False
-                                break
-
-                        if unique:
-                            track_names.append(str(n).zfill(2) + " - " + name)
-                            track_urls.append(DL_SERVER + a['href'])
-                            n += 1
-
-                except Exception:
+        songlist = soup.find("table", {"id": "songlist"})
+        for t in songlist.find_all("tr"):
+            try:
+                if t["id"] in ["songlist_header", "songlist_footer"]:
                     continue
+            except KeyError:
+                pass
+
+            cell = t.find("td", {"class": "clickable-row"})
+            if cell is None:
+                # TODO: proper debug output
+                print("Error: cell is None")
+                print(t)
+            else:
+                name = cell.a.text + quality
+                track_names.append(cell.a.text + quality)
+                track_urls.append(cell.a["href"])
 
         if track_names == []:
             print("ERROR: Could not find music for this album! Exiting...")
             sys.exit()
 
-        track_urls = [".".join(t.split(".")[:-1]) + quality for t in track_urls]
+        track_names = [str(n+int(args.countfrom1)).zfill(2) + " - " + name
+                        for n,name in enumerate(track_names)]
+        track_urls = [DL_SERVER + ".".join(t.split(".")[:-1]) + quality for t in track_urls]
 
         for (url, name) in zip(track_urls, track_names):
-            save(url, name, path + name)
+            songpage  = BeautifulSoup(requests.get(url).text, "html.parser")
+            for span in songpage.find_all("span", {"class": "songDownloadLink"}):
+                if quality in span.parent["href"]:
+                    song_url = span.parent["href"]
+                else:
+                    # TODO: debug output
+                    pass
+
+            print(url)
+            save(song_url, name, path + name)
 
     print("Download completed!")
 
